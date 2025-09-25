@@ -1,0 +1,207 @@
+# Chronos Vault - Time-Locked STX Escrow Contract
+A secure smart contract that enables users to create time-locked STX vaults with customizable unlock periods, partial withdrawals, and multi-vault management. Perfect for savings goals, vesting schedules, and delayed payments on the Stacks blockchain.
+
+##  Features
+### Core Functionality
+- **Time-Locked Vaults**: Create STX vaults with custom lock periods (minimum 1 day)
+- **Multi-Vault Management**: Each user can create up to 100 individual vaults
+- **Partial Withdrawals**: Withdraw any amount from unlocked vaults
+- **Additional Deposits**: Add more STX to existing vaults anytime
+- **Audit Trail**: Complete transaction history for transparency
+
+### Security Features
+- **Owner-Only Access**: Only vault creators can deposit/withdraw from their vaults
+- **Time-Lock Enforcement**: Withdrawals blocked until unlock height is reached
+- **Input Validation**: Comprehensive validation for all user inputs
+- **Emergency Pause**: Contract deployer can pause operations if needed
+- **Balance Verification**: Ensures sufficient STX before operations
+
+##  Contract Overview
+### Constants & Configuration
+```clarity
+MAXIMUM-VAULTS-PER-USER: 100 vaults
+MINIMUM-LOCK-BLOCKS: 144 blocks (~1 day)
+VAULT-CREATION-FEE: 1 STX
+MAXIMUM-VAULT-ID: 999,999,999
+```
+### Error Codes
+| Code | Error | Description |
+|------|-------|-------------|
+| 1001 | UNAUTHORIZED-ACCESS | Not authorized to perform this action |
+| 1002 | VAULT-NOT-FOUND | Vault doesn't exist |
+| 1003 | VAULT-STILL-LOCKED | Vault is still time-locked |
+| 1004 | INSUFFICIENT-STX-BALANCE | Not enough STX balance |
+| 1005 | INVALID-DEPOSIT-AMOUNT | Invalid deposit amount |
+| 1006 | INVALID-LOCK-DURATION | Lock duration too short |
+| 1007 | VAULT-LIMIT-EXCEEDED | Too many vaults for user |
+| 1008 | ZERO-BALANCE-VAULT | Vault has zero balance |
+| 1009 | WITHDRAWAL-AMOUNT-EXCEEDS-BALANCE | Withdrawal exceeds vault balance |
+| 1010 | INVALID-VAULT-ID | Invalid vault identifier |
+
+##  Public Functions
+### Vault Creation
+```clarity
+(create-new-time-locked-vault 
+  (initial-deposit-stx-amount uint) 
+  (lock-duration-in-blocks uint) 
+  (vault-description-label (string-ascii 50)))
+```
+**Purpose**: Create a new time-locked vault
+**Parameters**:
+- `initial-deposit-stx-amount`: STX amount to lock (> 0)
+- `lock-duration-in-blocks`: Lock period in blocks (≥ 144)
+- `vault-description-label`: Vault description (up to 50 characters)
+**Returns**: Vault ID on success
+**Fee**: 1 STX creation fee
+
+### Deposit Functions
+```clarity
+(deposit-additional-stx-funds (target-vault-identifier uint) (additional-stx-amount uint))
+```
+**Purpose**: Add more STX to an existing vault
+**Parameters**:
+- `target-vault-identifier`: ID of the target vault
+- `additional-stx-amount`: STX amount to add
+**Returns**: New vault balance on success
+
+### Withdrawal Functions
+```clarity
+(withdraw-complete-vault-balance (target-vault-identifier uint))
+```
+**Purpose**: Withdraw entire vault balance (only when unlocked)
+**Returns**: Withdrawn amount on success
+
+```clarity
+(withdraw-partial-stx-amount (target-vault-identifier uint) (requested-withdrawal-amount uint))
+```
+**Purpose**: Withdraw partial amount from vault (only when unlocked)
+**Parameters**:
+- `target-vault-identifier`: ID of the target vault
+- `requested-withdrawal-amount`: STX amount to withdraw
+**Returns**: Remaining vault balance on success
+
+##  Read-Only Functions
+### Vault Information
+```clarity
+(get-vault-complete-details (vault-identifier-to-query uint))
+```
+Returns complete vault information including owner, balance, unlock height, and creation details.
+
+```clarity
+(is-vault-unlocked-for-withdrawal (vault-identifier-to-check uint))
+```
+Check if a vault is ready for withdrawal (current block ≥ unlock height).
+
+```clarity
+(get-remaining-lock-blocks-count (vault-identifier-to-check uint))
+```
+Get remaining blocks until vault unlock (0 if already unlocked).
+
+### User Portfolio
+```clarity
+(get-user-complete-vault-portfolio (account-holder-principal-to-query principal))
+```
+Returns user's complete vault portfolio including all vault IDs and total locked STX.
+
+```clarity
+(calculate-user-total-locked-stx-value (account-holder-principal-to-query principal))
+```
+Calculate total STX value locked across all user's vaults.
+
+### Contract Analytics
+```clarity
+(get-contract-global-analytics)
+```
+Returns contract-wide statistics including total vaults created, total STX locked, and contract status.
+
+##  Usage Examples
+### Creating a Vault
+```clarity
+;; Create a 30-day vault with 100 STX
+(contract-call? .chronos-vault create-new-time-locked-vault 
+  u100000000  ;; 100 STX (in microSTX)
+  u4320       ;; 30 days (144 blocks/day * 30)
+  "Savings Goal")
+```
+
+### Adding Funds
+```clarity
+;; Add 50 STX to vault #1
+(contract-call? .chronos-vault deposit-additional-stx-funds 
+  u1          ;; Vault ID
+  u50000000)  ;; 50 STX
+```
+
+### Checking Vault Status
+```clarity
+;; Check if vault #1 is unlocked
+(contract-call? .chronos-vault is-vault-unlocked-for-withdrawal u1)
+
+;; Get remaining lock time
+(contract-call? .chronos-vault get-remaining-lock-blocks-count u1)
+```
+
+### Withdrawing Funds
+```clarity
+;; Withdraw 25 STX from vault #1 (when unlocked)
+(contract-call? .chronos-vault withdraw-partial-stx-amount 
+  u1          ;; Vault ID
+  u25000000)  ;; 25 STX
+
+;; Withdraw everything from vault #1
+(contract-call? .chronos-vault withdraw-complete-vault-balance u1)
+```
+
+##  Data Structures
+### Vault Registry
+```clarity
+{
+  vault-owner-principal: principal,
+  locked-stx-amount: uint,
+  unlock-block-height: uint,
+  creation-block-height: uint,
+  last-interaction-block-height: uint,
+  vault-description-label: (string-ascii 50)
+}
+```
+
+### User Collection Registry
+```clarity
+{
+  owned-vault-identifiers-list: (list 100 uint),
+  total-user-locked-stx: uint,
+  total-vault-count: uint
+}
+```
+
+##  Use Cases
+### Personal Finance
+- **Emergency Funds**: Lock STX for specific periods to avoid impulsive spending
+- **Savings Goals**: Create targeted savings for major purchases
+- **Budget Management**: Separate funds for different purposes
+
+### Business Applications
+- **Vesting Schedules**: Lock employee tokens with custom unlock periods
+- **Escrow Services**: Secure fund holding for business agreements
+- **Project Funding**: Time-locked project budgets and milestone releases
+
+### Investment Strategies
+- **Dollar Cost Averaging**: Regular deposits with time-locked periods
+- **Long-term Holding**: Prevent emotional trading decisions
+- **Structured Savings**: Multiple vaults for different investment timeframes
+
+##  Security Considerations
+### Access Control
+- Only vault owners can deposit/withdraw from their vaults
+- Contract deployer has emergency pause functionality
+- No admin access to user funds
+
+### Time-Lock Security
+- Withdrawals impossible before unlock height
+- Block height validation prevents manipulation
+- Minimum lock period enforced (1 day)
+
+### Input Validation
+- All user inputs validated before processing
+- Balance checks before transfers
+- Vault existence verification
